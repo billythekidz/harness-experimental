@@ -17,3 +17,6 @@ scripts/bin/harness-cli.exe
 
 # Local Symphony runtime state.
 .symphony/
+.harness/*
+!.harness/changesets/
+!.harness/changesets/*.changeset.jsonl
