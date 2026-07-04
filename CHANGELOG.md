@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-07-04 - PR #33
+
+- US-066: completed (@hoangnb24)
+- Merge commit: `fe26f2cde1d0e5e043dc807af35d945a975b51aa`
+- Harness CLI release: not required
+- Changed files:
+  - `.harness/changesets/run_1783164291664744000_6614_2.changeset.jsonl`
+  - `crates/harness-symphony/src/web.rs`
+  - `crates/harness-symphony/web-ui/src/main.tsx`
+  - `crates/harness-symphony/web-ui/tests/board.spec.ts`
+
 ## 2026-07-04 - PR #32
 
 - US-065: completed (@hoangnb24)
