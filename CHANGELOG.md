@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-07-12 - PR #43
+
+- Publish Harness orchestration protocol v1 and E11 separation foundations
+  (@hoangnb24)
+- Develop merge commit: `fa9fe27e2464ae9e60effcb7b8533f027b76a78b`
+- Harness CLI release: `harness-cli-v0.1.12`
+- Changed surfaces:
+  - `crates/harness-cli/`
+  - `scripts/schema/013-changeset-content-sha.sql`
+  - `scripts/install-harness.sh`
+  - `scripts/install-harness.ps1`
+  - `.github/workflows/harness-cli-release.yml`
+  - `docs/contracts/harness-orchestration-v1.md`
+  - `docs/stories/epics/E11-symphony-repository-separation/`
+  - `tests/protocol/`
+
 ## 2026-07-07 - PR #37
 
 - US-070: completed (@hoangnb24)
