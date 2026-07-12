@@ -98,11 +98,15 @@ path that changes those states.
 ## Installer / Release Contract
 
 Both installers accept an explicit upgrade operation (for example
-`--upgrade-cli --ref <immutable-tag>`) that verifies the platform artifact and
+`--upgrade-cli --ref <immutable-tag>` / `-UpgradeCli -Ref <immutable-tag>`) that verifies the platform artifact and
 checksum before an atomic binary replacement. Existing `--merge` semantics
 stay non-destructive. CI proves template files and the downloaded binary came
 from the same tag, then runs `query contract`, `query work-graph`, and
 `db snapshot` using the native artifact.
+
+The normative shapes and process behavior are in
+`docs/contracts/harness-orchestration-v1.md`; this design packet explains why
+the contract exists and does not duplicate it as a second authority.
 
 ## UI / Platform Impact
 

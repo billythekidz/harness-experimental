@@ -31,6 +31,7 @@ operations, and apply a validated changeset with a JSON result.
 - `docs/TOOL_REGISTRY.md`
 - `scripts/README.md`
 - New versioned Harness orchestration contract documentation.
+- `docs/contracts/harness-orchestration-v1.md`
 - `scripts/schema/007-story-dependencies.sql`
 - `scripts/schema/008-story-hierarchy.sql`
 
@@ -98,6 +99,9 @@ operations, and apply a validated changeset with a JSON result.
   the contract docs for `US-093` and `US-095`.
 - The release matrix runs a native JSON contract/snapshot smoke against every
   published binary, including PowerShell/Windows `.exe`, before publication.
+- Installer upgrade regression proves, step by step, that merge keeps the old
+  binary, an explicit immutable-ref upgrade installs the verified binary, a bad
+  checksum preserves the old binary, and a mutable ref is rejected.
 
 ## Non-Goals
 

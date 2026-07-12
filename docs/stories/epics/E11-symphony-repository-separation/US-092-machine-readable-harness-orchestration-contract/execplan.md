@@ -48,7 +48,9 @@ Hard gates:
 4. Add generic hierarchy mutation/replay and compare-and-set story writes.
 5. Validate changeset headers/content hashes and add JSON mutation/apply/status
    results.
-6. Add checksum-verified Bash/PowerShell forced CLI upgrade and native smoke.
+6. Add checksum-verified Bash `--upgrade-cli --ref <tag>` and PowerShell
+   `-UpgradeCli -Ref <tag>` replacement, prove ordinary merge remains a skip,
+   and run the native smoke.
 7. Run old and new CLI behavior side by side and update contract docs/fixtures.
 8. Merge through the normal CLI release path, then verify the immutable tag,
    all platform artifacts, checksums, and contract docs.
