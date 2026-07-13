@@ -231,7 +231,9 @@ For every task:
 1. Classify the request with `docs/FEATURE_INTAKE.md`.
 2. Record the classification with `scripts/bin/harness-cli intake`.
 3. Locate the affected product docs and story files.
-4. Check proof status with `scripts/bin/harness-cli query matrix`.
+4. Check focused proof status with
+   `scripts/bin/harness-cli query matrix --active --summary`, then use
+   `scripts/bin/harness-cli query matrix --story <id>` for the selected story.
 5. Work only inside the selected lane: tiny, normal, or high-risk.
 6. Before finishing, ask whether product truth, validation expectations,
    architecture rules, repeated failure patterns, or next-agent instructions
@@ -272,6 +274,13 @@ CLI rejects text values such as `yes` and `no`.
 Use `scripts/bin/harness-cli query matrix --numeric` when copying proof values
 back into `story update`. The default matrix output is human-readable
 `yes`/`no`; the numeric output mirrors CLI input.
+
+Use `query matrix --active --summary` to omit completed history and long
+evidence text while retaining lane, runnable state, and proof columns.
+`--runnable` uses the same planned/nonblank-verification/unblocked rule as
+protocol story discovery, and `--story <id>` selects one exact story. Filters
+combine with AND semantics. The unfiltered matrix remains the full durable
+proof view.
 
 `story complete <id>` is the explicit lifecycle transition for completed work.
 It requires an `in_progress` or `changed` story, runs fresh proof, and marks the

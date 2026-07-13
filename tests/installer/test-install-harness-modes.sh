@@ -24,6 +24,9 @@ install() {
 fresh="$temp/fresh"
 install --directory "$fresh" --yes >"$temp/fresh.out"
 [[ -x "$fresh/scripts/bin/harness-cli" ]]
+[[ -x "$fresh/scripts/bootstrap-harness.sh" ]]
+[[ -f "$fresh/scripts/bootstrap-harness.ps1" ]]
+[[ -f "$fresh/scripts/harness-cli-release-tag" ]]
 [[ ! -e "$fresh/harness.db" ]]
 [[ "$(find "$fresh/scripts/schema" -type f -name '*.sql' | wc -l | tr -d ' ')" == \
     "$(find "$root/scripts/schema" -type f -name '*.sql' | wc -l | tr -d ' ')" ]]

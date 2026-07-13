@@ -2759,20 +2759,32 @@ impl HarnessRepository for SqliteHarnessRepository {
     fn query_matrix(&self) -> Result<Vec<StoryMatrixRecord>> {
         let connection = self.open_existing()?;
         let mut statement = connection.prepare(
-            "SELECT id, title, status, unit_proof, integration_proof, e2e_proof, platform_proof, evidence
-             FROM story ORDER BY id;",
+            "SELECT s.id, s.title, s.risk_lane, s.status, s.unit_proof, s.integration_proof,
+                    s.e2e_proof, s.platform_proof, s.evidence,
+                    CASE WHEN s.status='planned'
+                               AND length(trim(COALESCE(s.verify_command,''))) > 0
+                               AND NOT EXISTS (
+                                   SELECT 1 FROM story_dependency d
+                                   JOIN story blocker ON blocker.id=d.story_id
+                                   WHERE d.blocks_story_id=s.id
+                                     AND blocker.status <> 'implemented'
+                               )
+                         THEN 1 ELSE 0 END AS runnable
+             FROM story s ORDER BY s.id;",
         )?;
 
         let rows = statement.query_map([], |row| {
             Ok(StoryMatrixRecord {
                 id: row.get(0)?,
                 title: row.get(1)?,
-                status: row.get(2)?,
-                unit: row.get(3)?,
-                integration: row.get(4)?,
-                e2e: row.get(5)?,
-                platform: row.get(6)?,
-                evidence: row.get(7)?,
+                risk_lane: row.get(2)?,
+                status: row.get(3)?,
+                unit: row.get(4)?,
+                integration: row.get(5)?,
+                e2e: row.get(6)?,
+                platform: row.get(7)?,
+                evidence: row.get(8)?,
+                runnable: row.get::<_, i64>(9)? == 1,
             })
         })?;
 
@@ -7215,6 +7227,51 @@ mod tests {
             fs::canonicalize(fs::read_to_string(pwd_output).unwrap().trim()).unwrap(),
             fs::canonicalize(repo_root).unwrap()
         );
+    }
+
+    #[test]
+    fn matrix_runnable_projection_matches_protocol_story_discovery() {
+        let (_temp_dir, repository) = test_repository();
+        repository.init().unwrap();
+
+        for (id, verify_command) in [
+            ("US-BLOCKER", Some("true")),
+            ("US-BLOCKED", Some("true")),
+            ("US-READY", Some("true")),
+            ("US-NO-PROOF", None),
+        ] {
+            repository
+                .add_story(StoryAddInput {
+                    id: id.to_owned(),
+                    title: format!("{id} title"),
+                    risk_lane: RiskLane::Normal,
+                    contract_doc: None,
+                    verify_command: verify_command.map(str::to_owned),
+                    notes: None,
+                })
+                .unwrap();
+        }
+        repository
+            .add_story_dependency(StoryDependencyInput {
+                blocker: "US-BLOCKER".to_owned(),
+                blocked: "US-BLOCKED".to_owned(),
+            })
+            .unwrap();
+
+        let protocol_stories = repository.query_orchestration_stories().unwrap();
+        let matrix = repository.query_matrix().unwrap();
+        assert_eq!(matrix.len(), protocol_stories.len());
+        for matrix_story in matrix {
+            let protocol_story = protocol_stories
+                .iter()
+                .find(|story| story.id == matrix_story.id)
+                .unwrap();
+            assert_eq!(
+                matrix_story.runnable, protocol_story.runnable,
+                "runnable mismatch for {}",
+                matrix_story.id
+            );
+        }
     }
 
     #[test]

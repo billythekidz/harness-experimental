@@ -138,6 +138,20 @@ verifies its `.sha256` checksum, and installs it at
 `scripts/bin/harness-cli` on macOS/Linux or `scripts/bin/harness-cli.exe` on
 Windows. The Rust CLI is the main Harness tool and stable command path.
 
+Then bootstrap the local ignored database. A Harness source checkout builds the
+CLI from that checkout and validates the restored core-state epoch; it refuses
+to fabricate an empty replacement for missing repository state. An installed
+project reuses the verified release binary and initializes its own empty local
+state:
+
+```bash
+scripts/bootstrap-harness.sh
+```
+
+```powershell
+.\scripts\bootstrap-harness.ps1
+```
+
 Harness CLI release assets are published from tags by the
 `Harness CLI Release` GitHub Actions workflow. The installer expects each
 release to include `harness-cli-<platform>` and

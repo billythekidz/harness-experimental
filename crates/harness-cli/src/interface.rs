@@ -591,11 +591,23 @@ struct QueryArgs {
     view: QueryView,
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Default)]
 struct MatrixQueryArgs {
     /// Render proof flags as CLI input values, 1 and 0, instead of yes and no.
     #[arg(long)]
     numeric: bool,
+    /// Show only unfinished stories: planned, in_progress, or changed.
+    #[arg(long)]
+    active: bool,
+    /// Show only stories currently runnable under the protocol-v1 rule.
+    #[arg(long)]
+    runnable: bool,
+    /// Show only one exact story ID. Combines with the other filters.
+    #[arg(long, value_name = "ID")]
+    story: Option<String>,
+    /// Omit the potentially long evidence column.
+    #[arg(long)]
+    summary: bool,
 }
 
 #[derive(Args, Debug)]
@@ -1519,7 +1531,10 @@ pub fn run(cli: Cli) -> Result<(), InterfaceError> {
                 "query.work-graph",
                 serde_json::to_value(service.query_work_graph()?)?,
             )?,
-            QueryView::Matrix(args) => print_matrix(&service.query_matrix()?, args.numeric),
+            QueryView::Matrix(args) => {
+                let records = filter_matrix(service.query_matrix()?, &args);
+                print_matrix(&records, args.numeric, args.summary)
+            }
             QueryView::Dependencies(args) => {
                 let dependencies = service.query_story_dependencies(args.story.as_deref())?;
                 if args.json {
@@ -1923,28 +1938,74 @@ fn resolve_db_path(
         .unwrap_or_else(|| repo_root.join("harness.db"))
 }
 
-fn print_matrix(records: &[StoryMatrixRecord], numeric: bool) {
+fn filter_matrix(
+    records: Vec<StoryMatrixRecord>,
+    args: &MatrixQueryArgs,
+) -> Vec<StoryMatrixRecord> {
+    records
+        .into_iter()
+        .filter(|record| {
+            args.story.as_deref().is_none_or(|story| record.id == story)
+                && (!args.active
+                    || matches!(
+                        record.status.as_str(),
+                        "planned" | "in_progress" | "changed"
+                    ))
+                && (!args.runnable || record.runnable)
+        })
+        .collect()
+}
+
+fn matrix_table(
+    records: &[StoryMatrixRecord],
+    numeric: bool,
+    summary: bool,
+) -> (Vec<&'static str>, Vec<Vec<String>>) {
     let rows = records
         .iter()
         .map(|record| {
-            vec![
-                record.id.clone(),
-                record.title.clone(),
-                record.status.clone(),
-                proof_display(record.unit, numeric),
-                proof_display(record.integration, numeric),
-                proof_display(record.e2e, numeric),
-                proof_display(record.platform, numeric),
-                record.evidence.clone().unwrap_or_default(),
-            ]
+            if summary {
+                vec![
+                    record.id.clone(),
+                    record.title.clone(),
+                    record.risk_lane.clone(),
+                    record.status.clone(),
+                    if record.runnable { "yes" } else { "no" }.to_owned(),
+                    proof_display(record.unit, numeric),
+                    proof_display(record.integration, numeric),
+                    proof_display(record.e2e, numeric),
+                    proof_display(record.platform, numeric),
+                ]
+            } else {
+                vec![
+                    record.id.clone(),
+                    record.title.clone(),
+                    record.status.clone(),
+                    proof_display(record.unit, numeric),
+                    proof_display(record.integration, numeric),
+                    proof_display(record.e2e, numeric),
+                    proof_display(record.platform, numeric),
+                    record.evidence.clone().unwrap_or_default(),
+                ]
+            }
         })
         .collect::<Vec<_>>();
-    print_table(
-        &[
+
+    let headers = if summary {
+        vec![
+            "id", "title", "lane", "status", "runnable", "unit", "integ", "e2e", "plat",
+        ]
+    } else {
+        vec![
             "id", "title", "status", "unit", "integ", "e2e", "plat", "evidence",
-        ],
-        &rows,
-    );
+        ]
+    };
+    (headers, rows)
+}
+
+fn print_matrix(records: &[StoryMatrixRecord], numeric: bool, summary: bool) {
+    let (headers, rows) = matrix_table(records, numeric, summary);
+    print_table(&headers, &rows);
 }
 
 fn print_dependencies(records: &[crate::application::StoryDependencyRecord]) {
@@ -2396,6 +2457,26 @@ mod tests {
     use clap::{CommandFactory, Parser};
     use std::path::Path;
 
+    fn matrix_record(
+        id: &str,
+        status: &str,
+        runnable: bool,
+        evidence: Option<&str>,
+    ) -> StoryMatrixRecord {
+        StoryMatrixRecord {
+            id: id.to_owned(),
+            title: format!("{id} title"),
+            risk_lane: "normal".to_owned(),
+            status: status.to_owned(),
+            unit: 1,
+            integration: 0,
+            e2e: 1,
+            platform: 0,
+            evidence: evidence.map(str::to_owned),
+            runnable,
+        }
+    }
+
     #[test]
     fn cli_definition_is_valid() {
         Cli::command().debug_assert();
@@ -2487,6 +2568,150 @@ mod tests {
                 view: QueryView::ImprovementHealth
             })
         ));
+    }
+
+    #[test]
+    fn matrix_query_parses_additive_filters() {
+        let cli = Cli::try_parse_from([
+            "harness-cli",
+            "query",
+            "matrix",
+            "--active",
+            "--runnable",
+            "--story",
+            "US-079",
+            "--summary",
+            "--numeric",
+        ])
+        .unwrap();
+
+        assert!(matches!(
+            cli.command,
+            Command::Query(QueryArgs {
+                view: QueryView::Matrix(MatrixQueryArgs {
+                    active: true,
+                    runnable: true,
+                    story: Some(story),
+                    summary: true,
+                    numeric: true,
+                })
+            }) if story == "US-079"
+        ));
+    }
+
+    #[test]
+    fn matrix_filters_combine_with_and_semantics() {
+        let active = filter_matrix(
+            vec![
+                matrix_record("US-A", "planned", true, Some("ready")),
+                matrix_record("US-B", "planned", false, Some("blocked")),
+                matrix_record("US-C", "in_progress", false, None),
+                matrix_record("US-D", "implemented", false, Some("done")),
+                matrix_record("US-E", "changed", false, Some("changed")),
+                matrix_record("US-F", "retired", false, Some("retired")),
+            ],
+            &MatrixQueryArgs {
+                active: true,
+                ..MatrixQueryArgs::default()
+            },
+        );
+        assert_eq!(
+            active
+                .iter()
+                .map(|record| record.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["US-A", "US-B", "US-C", "US-E"]
+        );
+
+        let runnable = filter_matrix(
+            vec![
+                matrix_record("US-A", "planned", true, Some("ready")),
+                matrix_record("US-B", "planned", false, Some("blocked")),
+            ],
+            &MatrixQueryArgs {
+                runnable: true,
+                ..MatrixQueryArgs::default()
+            },
+        );
+        assert_eq!(runnable.len(), 1);
+        assert_eq!(runnable[0].id, "US-A");
+
+        let exact_story = filter_matrix(
+            vec![
+                matrix_record("US-A", "planned", true, None),
+                matrix_record("US-D", "implemented", false, None),
+            ],
+            &MatrixQueryArgs {
+                story: Some("US-D".to_owned()),
+                ..MatrixQueryArgs::default()
+            },
+        );
+        assert_eq!(exact_story.len(), 1);
+        assert_eq!(exact_story[0].id, "US-D");
+
+        let combined = filter_matrix(
+            vec![
+                matrix_record("US-A", "planned", true, Some("ready")),
+                matrix_record("US-B", "planned", false, Some("blocked")),
+                matrix_record("US-C", "in_progress", false, None),
+                matrix_record("US-D", "implemented", false, Some("done")),
+            ],
+            &MatrixQueryArgs {
+                active: true,
+                runnable: true,
+                story: Some("US-A".to_owned()),
+                ..MatrixQueryArgs::default()
+            },
+        );
+        assert_eq!(combined.len(), 1);
+        assert_eq!(combined[0].id, "US-A");
+
+        let excluded = filter_matrix(
+            vec![matrix_record("US-B", "planned", false, None)],
+            &MatrixQueryArgs {
+                active: true,
+                runnable: true,
+                story: Some("US-B".to_owned()),
+                ..MatrixQueryArgs::default()
+            },
+        );
+        assert!(excluded.is_empty());
+    }
+
+    #[test]
+    fn matrix_default_and_numeric_output_shape_remain_unchanged() {
+        let record = matrix_record("US-A", "planned", true, Some("proof details"));
+
+        let (headers, rows) = matrix_table(std::slice::from_ref(&record), false, false);
+        assert_eq!(
+            headers,
+            vec!["id", "title", "status", "unit", "integ", "e2e", "plat", "evidence"]
+        );
+        assert_eq!(
+            rows,
+            vec![vec![
+                "US-A",
+                "US-A title",
+                "planned",
+                "yes",
+                "no",
+                "yes",
+                "no",
+                "proof details",
+            ]]
+        );
+
+        let (_, numeric_rows) = matrix_table(std::slice::from_ref(&record), true, false);
+        assert_eq!(&numeric_rows[0][3..7], ["1", "0", "1", "0"]);
+
+        let (summary_headers, summary_rows) = matrix_table(&[record], false, true);
+        assert_eq!(
+            summary_headers,
+            vec!["id", "title", "lane", "status", "runnable", "unit", "integ", "e2e", "plat"]
+        );
+        assert_eq!(summary_rows[0].len(), 9);
+        assert_eq!(&summary_rows[0][2..5], ["normal", "planned", "yes"]);
+        assert!(!summary_rows[0].iter().any(|value| value == "proof details"));
     }
 
     #[test]
@@ -2614,5 +2839,9 @@ mod tests {
             .render_long_help()
             .to_string();
         assert!(matrix_help.contains("--numeric"));
+        assert!(matrix_help.contains("--active"));
+        assert!(matrix_help.contains("--runnable"));
+        assert!(matrix_help.contains("--story <ID>"));
+        assert!(matrix_help.contains("--summary"));
     }
 }

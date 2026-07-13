@@ -8,6 +8,26 @@ The Rust Harness CLI is the primary interface for the durable layer. Installed
 projects use the prebuilt binary at `scripts/bin/harness-cli` on macOS/Linux or
 `scripts/bin/harness-cli.exe` on Windows for normal Harness work.
 
+After a fresh clone or install, bootstrap the local ignored runtime before
+querying state:
+
+```bash
+scripts/bootstrap-harness.sh
+```
+
+```powershell
+.\scripts\bootstrap-harness.ps1
+```
+
+In this source repository, bootstrap builds the CLI from the checked-out Rust
+source so code and command behavior cannot drift. It refuses to invent an empty
+replacement when the default core database is missing, and it rejects a
+schema-current database that still contains product-owned state. Restore the
+verified core epoch in that case. In an installed consumer it uses the
+checksum-verified prebuilt binary and safely initializes a missing local
+database. Both modes migrate older supported databases and refuse unsupported
+schemas or CLI/release-pin drift.
+
 ```bash
 scripts/bin/harness-cli init          # Create the database
 scripts/bin/harness-cli intake ...    # Record a feature intake classification
@@ -23,6 +43,9 @@ scripts/bin/harness-cli trace ...     # Record and auto-score an agent execution
 scripts/bin/harness-cli score-trace   # Score a trace against TRACE_SPEC.md tiers
 scripts/bin/harness-cli query ...     # Query harness data, including backlog --open/--closed
 scripts/bin/harness-cli query matrix --numeric  # Show proof flags as 1/0
+scripts/bin/harness-cli query matrix --active --summary  # Focus on unfinished work without evidence text
+scripts/bin/harness-cli query matrix --runnable --summary # Show work ready under protocol-v1 rules
+scripts/bin/harness-cli query matrix --story US-001      # Inspect one exact story
 scripts/bin/harness-cli db changeset apply .harness/changesets/run_123.changeset.jsonl
 scripts/bin/harness-cli db rebuild --from .harness/changesets
 scripts/bin/harness-cli migrate       # Apply pending schema migrations
@@ -45,10 +68,18 @@ complete <id>` so fresh proof and the implemented transition happen together.
 Backlog `--risk` uses Harness lanes, not severity words: use `tiny`, `normal`,
 or `high-risk`. Use `tiny` instead of `low`. `query matrix` defaults to
 human-readable `yes`/`no`; use `query matrix --numeric` when copying values into
-`story update`.
+`story update`. Matrix filters combine with AND semantics: `--active` keeps
+`planned`, `in_progress`, and `changed` stories; `--runnable` uses the same rule
+as protocol story discovery; `--story <id>` selects one exact ID. `--summary`
+omits the potentially long evidence column while keeping lane and runnable
+state. With none of these flags, the existing full matrix output is unchanged.
 
 The schema lives in `scripts/schema/` and is version-controlled. The database
 file (`harness.db`) is `.gitignore`d.
+
+Repository maintainers can run `scripts/verify-revision-coherence.sh` to prove
+that crate, lockfile, pinned-release, migration, protocol, bootstrap, replay,
+and public-command contracts describe the same revision.
 
 Set `HARNESS_DB_PATH=/path/to/harness.db` when a workflow needs `harness-cli`
 to operate on an isolated copied database. `HARNESS_DB_PATH` takes precedence

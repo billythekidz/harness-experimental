@@ -945,6 +945,10 @@ log "Target project: $TARGET_DIR"
 
 copy_payload_files
 
+if [ "$DRY_RUN" -eq 0 ] && [ -f "$TARGET_DIR/scripts/bootstrap-harness.sh" ]; then
+  chmod 755 "$TARGET_DIR/scripts/bootstrap-harness.sh"
+fi
+
 refresh_agent_shim
 write_claude_shim
 install_harness_cli_binary

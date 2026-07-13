@@ -179,7 +179,7 @@ without parsing the human table.
 | `score-context` | Context selection | Score trace reads against compiled context rules. | trace id |
 | `audit` | Entropy auditing | Run drift checks and compute entropy score. | none |
 | `propose` | Entropy auditing | Read deterministic improvement proposals, or explicitly accept/reject one stable key. | `--accept <key>` plus one outcome schedule, or `--reject <key> --reason <text>` |
-| `query matrix` | Task state | Show durable story proof matrix. | optional `--numeric` |
+| `query matrix` | Task state | Show the durable story proof matrix, optionally focused to active, runnable, or one exact story and without long evidence text. | optional `--numeric`, `--active`, `--runnable`, `--story <id>`, `--summary` |
 | `query contract` | Tool access | Discover protocol, capabilities, supported schema range, and DB state without writes. | required `--json` |
 | `query stories` | Task state | Return stable orchestration story records. | required `--json` |
 | `query work-graph` | Task state | Return one transactionally consistent story/dependency/hierarchy graph and revision. | required `--json` |
