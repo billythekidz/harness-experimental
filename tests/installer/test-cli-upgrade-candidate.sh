@@ -37,6 +37,7 @@ candidate_version=$($candidate --version | awk '{print $2}')
 if [[ "$candidate_ref" != harness-cli-v0.0.0-candidate ]]; then
   [[ "$candidate_ref" == "harness-cli-v$candidate_version" ]]
 fi
+"$root/tests/protocol/smoke-v0.1.14-artifact.sh" "$initial"
 cp "$candidate" "$assets/$asset_name"
 (cd "$assets" && shasum -a 256 "$asset_name" >"$asset_name.sha256")
 
@@ -54,7 +55,6 @@ grep -Fq 'query matrix --active --summary' "$target/AGENTS.md"
 agent_backup=$(find "$target/.harness-backup" -name AGENTS.md -type f | head -n 1)
 [[ "$(shasum -a 256 "$agent_backup" | awk '{print $1}')" == "$before_agents" ]]
 [[ -f "$target/scripts/schema/001-init.sql" ]]
-"$root/tests/protocol/smoke-native-artifact.sh" "$initial"
 "$root/tests/protocol/smoke-native-artifact.sh" "$target/scripts/bin/harness-cli"
 
 echo "checksum-verified upgrade from initial protocol artifact to cleaned candidate passed"

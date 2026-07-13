@@ -82,7 +82,7 @@ jobs:
               printf -- '- Merge commit: `%s`\n' "$merge_sha"
             fi
             if [ "$cli_changed" = true ]; then
-              printf -- '- Harness CLI release: `%s`\n' "$release_tag"
+              printf -- '- Harness CLI candidate: `%s` (publication requires platform proof)\n' "$release_tag"
             else
               printf -- '- Harness CLI release: not required\n'
             fi
@@ -112,15 +112,6 @@ jobs:
             maintenance_ref="$(git rev-parse HEAD)"
           fi
 
-          if [ "$cli_changed" = true ]; then
-            if git ls-remote --exit-code --tags origin "refs/tags/$release_tag" >/dev/null 2>&1; then
-              echo "Tag $release_tag already exists."
-            else
-              git tag -a "$release_tag" -m "Harness CLI $release_tag"
-              git push origin "$release_tag"
-            fi
-          fi
-
           {
             echo "cli_changed=$cli_changed"
             echo "release_tag=$release_tag"
@@ -136,4 +127,4 @@ jobs:
       contents: write
     with:
       release_tag: ${{ needs.prepare.outputs.release_tag }}
-      checkout_ref: ${{ needs.prepare.outputs.release_tag }}
+      checkout_ref: ${{ needs.prepare.outputs.maintenance_ref }}
