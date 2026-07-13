@@ -43,6 +43,26 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "harness init failed" }
     $null = Invoke-HarnessJson -Arguments @("story", "add", "--id", "US-A", "--title", "Alpha", "--lane", "normal", "--verify", "true", "--json")
     $null = Invoke-HarnessJson -Arguments @("story", "add", "--id", "US-B", "--title", "Beta", "--lane", "normal", "--verify", "true", "--json")
+
+    $querySqlRead = @(& $Artifact query sql "WITH selected AS (SELECT id FROM story WHERE id='US-A') SELECT id FROM selected;") -join "`n"
+    if ($LASTEXITCODE -ne 0 -or -not $querySqlRead.Contains("US-A")) {
+        throw "Read-only query SQL did not return the sentinel story"
+    }
+    $querySqlWriteStderr = Join-Path $Temp "query-sql-write.stderr"
+    $env:HARNESS_RUN_ID = "protocol_query_sql_write"
+    & $Artifact query sql "WITH doomed AS (SELECT id FROM story WHERE id='US-A') DELETE FROM story WHERE id IN (SELECT id FROM doomed) RETURNING id;" 2>$querySqlWriteStderr | Out-Null
+    $querySqlWriteExit = $LASTEXITCODE
+    Remove-Item Env:HARNESS_RUN_ID -ErrorAction SilentlyContinue
+    if ($querySqlWriteExit -ne 1 -or -not (Get-Content -Raw $querySqlWriteStderr).Contains("query sql is read-only")) {
+        throw "Query SQL accepted a mutating CTE"
+    }
+    $querySqlChangeset = Join-Path $Temp ".harness/changesets/protocol_query_sql_write.changeset.jsonl"
+    if (Test-Path $querySqlChangeset) { throw "Rejected query SQL write emitted a semantic changeset" }
+    $querySqlStories = Invoke-HarnessJson -Arguments @("query", "stories", "--json")
+    if (($querySqlStories.result.stories | Where-Object id -eq "US-A").title -ne "Alpha") {
+        throw "Rejected query SQL write changed story state"
+    }
+
     $null = Invoke-HarnessJson -Arguments @("story", "dependency", "add", "--blocker", "US-A", "--blocked", "US-B", "--json")
     $null = Invoke-HarnessJson -Arguments @("story", "hierarchy", "add", "--parent", "US-A", "--child", "US-B", "--json")
     $graph = Invoke-HarnessJson -Arguments @("query", "work-graph", "--json")
@@ -50,10 +70,26 @@ try {
         throw "Work graph is incomplete or has no stable revision"
     }
 
-    $cas = Invoke-HarnessJson -Arguments @("story", "update", "--id", "US-A", "--status", "implemented", "--expected-status", "planned", "--require-runnable", "--json")
-    if ($cas.result.before_status -ne "planned" -or $cas.result.after_status -ne "implemented") {
+    $textBypassStderr = Join-Path $Temp "text-bypass.stderr"
+    & $Artifact story update --id US-A --status implemented 2>$textBypassStderr | Out-Null
+    if ($LASTEXITCODE -ne 1 -or -not (Get-Content -Raw $textBypassStderr).Contains("status 'implemented' is completion-only")) {
+        throw "Human-readable story update did not reject the completion bypass"
+    }
+    $casBypass = Invoke-HarnessJson -Arguments @("story", "update", "--id", "US-A", "--status", "implemented", "--expected-status", "planned", "--require-runnable", "--json") -ExpectedExit 2
+    if ($casBypass.error.code -ne "INVALID_ARGUMENT" -or -not $casBypass.error.message.Contains("story complete US-A")) {
+        throw "Machine story update did not reject the completion bypass"
+    }
+    $unchangedStories = Invoke-HarnessJson -Arguments @("query", "stories", "--json")
+    if (($unchangedStories.result.stories | Where-Object id -eq "US-A").status -ne "planned") {
+        throw "Rejected completion bypass changed story state"
+    }
+
+    $cas = Invoke-HarnessJson -Arguments @("story", "update", "--id", "US-A", "--status", "in_progress", "--expected-status", "planned", "--require-runnable", "--json")
+    if ($cas.result.before_status -ne "planned" -or $cas.result.after_status -ne "in_progress") {
         throw "CAS result did not report the transition"
     }
+    $complete = Invoke-HarnessJson -Arguments @("story", "complete", "US-A", "--json")
+    if ($complete.result.result -ne "pass") { throw "Explicit story completion did not pass" }
     $conflict = Invoke-HarnessJson -Arguments @("story", "hierarchy", "add", "--parent", "US-B", "--child", "US-A", "--json") -ExpectedExit 3
     if ($conflict.error.code -ne "CONFLICT") { throw "Hierarchy cycle was not a stable conflict" }
 

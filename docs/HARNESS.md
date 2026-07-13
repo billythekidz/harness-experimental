@@ -48,11 +48,11 @@ The app is what users touch. The harness is what agents touch.
 +------------------+
 ```
 
-Every task has two possible outputs:
+A change request can have two outputs:
 
 1. Product delta: app code, tests, API shape, data model, or product docs.
-2. Harness delta: docs, templates, validation expectations, backlog items, or
-   decision records that make the next task easier.
+2. Harness delta, when warranted: docs, templates, validation expectations,
+   backlog items, or decision records that make the next change easier.
 
 ## Harness v0 Scope
 
@@ -64,21 +64,24 @@ Harness v0 includes:
 - Story templates.
 - Decision log template.
 - Validation report template.
-- Test matrix placeholder.
+- SQLite-backed proof matrix and a legacy import template.
 - Harness growth backlog.
 - Durable layer: SQLite database and CLI for operational records.
+- Upstream contract tests and pull-request/release validation.
 
 Harness v0 deliberately excludes:
 
-- A project-specific `SPEC.md`.
-- Pre-sliced product domains.
-- A locked application stack.
-- App source scaffolding.
-- Package scripts.
-- Test runner config.
-- CI workflows.
+- A consumer-project-specific `SPEC.md`.
+- Pre-sliced consumer product domains.
+- A locked consumer application stack.
+- Consumer app source scaffolding.
+- Consumer package scripts and test-runner configuration.
+- Consumer CI workflows.
 
-Those should arrive only when a selected story needs them.
+Those belong to the installed project and should arrive only when one of its
+selected stories needs them. The upstream Harness repository has its own Rust
+workspace, tests, and CI because the Harness CLI and templates are products
+that require executable proof.
 
 ## Durable Layer
 
@@ -224,24 +227,46 @@ Backlog risk uses the same lane vocabulary as intake and stories:
 `tiny`, `normal`, or `high-risk`. Use `--risk tiny` for low-risk follow-up
 items; `low` is not a valid lane.
 
-## Task Loop
+## Request-Class Loops
 
-For every task:
+Classify authority before running Harness commands. The request class decides
+whether repository state may change.
 
-1. Classify the request with `docs/FEATURE_INTAKE.md`.
-2. Record the classification with `scripts/bin/harness-cli intake`.
-3. Locate the affected product docs and story files.
-4. Check proof status with `scripts/bin/harness-cli query matrix`.
-5. Work only inside the selected lane: tiny, normal, or high-risk.
+### Read-Only Requests
+
+Answer, explain, review, diagnose, plan, and status requests are read-only.
+
+1. Read `AGENTS.md` and only the files or evidence needed for the response.
+2. Use read-only inspection commands when useful.
+3. Do not run bootstrap, initialize or migrate a database, record intake,
+   update stories or backlog, or record a trace.
+4. Stop when the answer is supported by concrete repository evidence.
+
+For example, a request to diagnose why an installer test fails may inspect the
+test, installer, and captured output. It must not bootstrap a missing database
+or create an intake row merely to explain the failure.
+
+### Change Requests
+
+Change, build, and fix requests authorize the normal Harness mutation loop:
+
+1. Bootstrap the local ignored runtime with `scripts/bootstrap-harness.sh` on
+   macOS/Linux or `.\scripts\bootstrap-harness.ps1` on Windows.
+2. Classify the request with `docs/FEATURE_INTAKE.md` and record the
+   classification with `scripts/bin/harness-cli intake`.
+3. Check focused proof status with
+   `scripts/bin/harness-cli query matrix --active --summary`, then use
+   `scripts/bin/harness-cli query matrix --story <id>` if a story is selected.
+4. Retrieve only the affected product, story, decision, and implementation
+   files required by the selected lane in `docs/CONTEXT_RULES.md`.
+5. Implement and validate inside that lane: tiny, normal, or high-risk.
 6. Before finishing, ask whether product truth, validation expectations,
    architecture rules, repeated failure patterns, or next-agent instructions
    changed.
 7. Record a trace with `scripts/bin/harness-cli trace`, using
-   `docs/TRACE_SPEC.md` for the expected trace tier and field depth.
-8. Review the trace score printed by `scripts/bin/harness-cli trace`; use
-   `scripts/bin/harness-cli score-trace --id <id>` only when re-checking a
-   specific historical trace.
-9. If harness friction was found, either fix it directly or record it with
+   `docs/TRACE_SPEC.md` for the expected trace tier and field depth, and review
+   the printed score.
+8. If Harness friction was found, fix it in scope or record it with
    `scripts/bin/harness-cli backlog add`.
 
 ## Story Verification
@@ -273,13 +298,23 @@ Use `scripts/bin/harness-cli query matrix --numeric` when copying proof values
 back into `story update`. The default matrix output is human-readable
 `yes`/`no`; the numeric output mirrors CLI input.
 
+Use `query matrix --active --summary` to omit completed history and long
+evidence text while retaining lane, runnable state, and proof columns.
+`--runnable` uses the same planned/nonblank-verification/unblocked rule as
+protocol story discovery, and `--story <id>` selects one exact story. Filters
+combine with AND semantics. The unfiltered matrix remains the full durable
+proof view.
+
 `story complete <id>` is the explicit lifecycle transition for completed work.
 It requires an `in_progress` or `changed` story, runs fresh proof, and marks the
 story implemented only when that proof passes. Resolver stories additionally
 require a stable linked Harness-improvement intake and a completed matching
 implementation trace recorded after the newest resolver link. On pass, story
 proof and eligible accepted backlog closures are committed atomically and
-replayably. Ordinary `story verify` and `story verify-all` remain proof-only.
+replayably. Ordinary text updates and JSON compare-and-set updates reject an
+`implemented` target and direct the caller to `story complete`; other lifecycle,
+proof, evidence, and verification-command updates remain available. Ordinary
+`story verify` and `story verify-all` remain proof-only.
 
 ## Phase 5 Evolution Commands
 
@@ -352,7 +387,9 @@ record requirement.
 
 Agents may update directly:
 
-- Story status and evidence via `scripts/bin/harness-cli story update`.
+- Non-completion story status and evidence via
+  `scripts/bin/harness-cli story update`; use `story complete` to reach
+  `implemented`.
 - Test matrix rows via `scripts/bin/harness-cli story add` and
   `scripts/bin/harness-cli story update`.
 - Links from story packets to product docs.
@@ -370,14 +407,18 @@ Agents should ask for human confirmation before:
 
 ## Done Definition
 
-A task is done only when:
+A read-only request is done when the response is supported by repository
+evidence, clearly separates facts from inference, and leaves repository and
+Harness state unchanged.
+
+A change request is done only when:
 
 - The requested change is completed or the blocker is documented.
 - Relevant docs, stories, and test matrix entries remain current.
 - Validation commands were run when they exist.
 - A trace has been recorded with `scripts/bin/harness-cli trace`.
-- Missing harness capabilities were recorded with
-  `scripts/bin/harness-cli backlog add`.
+- Missing Harness capabilities were recorded with
+  `scripts/bin/harness-cli backlog add` when relevant.
 - The final response says what changed and what was not attempted.
 
 ## Future Validation Ladder

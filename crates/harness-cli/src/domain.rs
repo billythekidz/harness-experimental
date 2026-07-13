@@ -356,7 +356,7 @@ pub fn compiled_tool_registry() -> Vec<ToolEntry> {
             "harness-cli",
             "story update",
             "story update",
-            "Update story status, proof flags, or verification command.",
+            "Update non-completion story status, proof flags, or verification command.",
             &[("id", "string", true)],
             "Task state",
             "0.1.0",
@@ -501,7 +501,13 @@ pub fn compiled_tool_registry() -> Vec<ToolEntry> {
             "query matrix",
             "query matrix",
             "Show durable story proof matrix.",
-            &[],
+            &[
+                ("numeric", "flag", false),
+                ("active", "flag", false),
+                ("runnable", "flag", false),
+                ("story", "string", false),
+                ("summary", "flag", false),
+            ],
             "Task state",
             "0.1.0",
         ),
@@ -590,7 +596,7 @@ pub fn compiled_tool_registry() -> Vec<ToolEntry> {
             "harness-cli",
             "query sql",
             "query sql",
-            "Run arbitrary SQL against harness.db.",
+            "Run one read-only SQL statement against harness.db.",
             &[("query", "string", true)],
             "Tool access",
             "0.1.0",
@@ -676,12 +682,14 @@ pub struct IntakeRecord {
 pub struct StoryMatrixRecord {
     pub id: String,
     pub title: String,
+    pub risk_lane: String,
     pub status: String,
     pub unit: i64,
     pub integration: i64,
     pub e2e: i64,
     pub platform: i64,
     pub evidence: Option<String>,
+    pub runnable: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]

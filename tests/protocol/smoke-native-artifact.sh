@@ -25,6 +25,19 @@ run story add --id US-A --title Alpha --lane normal --verify true --json >"$tmp/
 run story add --id US-B --title Beta --lane normal --verify true --json >"$tmp/add-b.json"
 jq -e '.result.changed and .result.story.id == "US-A"' "$tmp/add-a.json" >/dev/null
 
+run query sql "WITH selected AS (SELECT id FROM story WHERE id='US-A') SELECT id FROM selected;" >"$tmp/query-sql-read.txt"
+grep -Fq 'US-A' "$tmp/query-sql-read.txt"
+set +e
+HARNESS_RUN_ID=protocol_query_sql_write run query sql \
+  "WITH doomed AS (SELECT id FROM story WHERE id='US-A') DELETE FROM story WHERE id IN (SELECT id FROM doomed) RETURNING id;" \
+  >"$tmp/query-sql-write.out" 2>"$tmp/query-sql-write.err"
+query_sql_write_exit=$?
+set -e
+test "$query_sql_write_exit" -eq 1
+grep -Fq 'query sql is read-only' "$tmp/query-sql-write.err"
+test ! -e "$tmp/.harness/changesets/protocol_query_sql_write.changeset.jsonl"
+run query stories --json | jq -e '(.result.stories[] | select(.id == "US-A").title) == "Alpha"' >/dev/null
+
 run story dependency add --blocker US-A --blocked US-B --json >/dev/null
 run story hierarchy add --parent US-A --child US-B --json >/dev/null
 run query work-graph --json >"$tmp/graph-before.json"
@@ -36,8 +49,25 @@ jq -e '
   .result.hierarchy == [{"parent":"US-A","child":"US-B"}]
 ' "$tmp/graph-before.json" >/dev/null
 
-run story update --id US-A --status implemented --expected-status planned --require-runnable --json >"$tmp/cas.json"
-jq -e '.result.before_status == "planned" and .result.after_status == "implemented" and .result.runnable_before' "$tmp/cas.json" >/dev/null
+set +e
+run story update --id US-A --status implemented >"$tmp/text-bypass.out" 2>"$tmp/text-bypass.err"
+text_bypass_exit=$?
+set -e
+test "$text_bypass_exit" -eq 1
+grep -F "status 'implemented' is completion-only" "$tmp/text-bypass.err" >/dev/null
+
+set +e
+run story update --id US-A --status implemented --expected-status planned --require-runnable --json >"$tmp/cas-bypass.json"
+cas_bypass_exit=$?
+set -e
+test "$cas_bypass_exit" -eq 2
+jq -e '.error.code == "INVALID_ARGUMENT" and .operation == "story.update" and (.error.message | contains("story complete US-A"))' "$tmp/cas-bypass.json" >/dev/null
+run query stories --json | jq -e '(.result.stories[] | select(.id == "US-A").status) == "planned"' >/dev/null
+
+run story update --id US-A --status in_progress --expected-status planned --require-runnable --json >"$tmp/cas.json"
+jq -e '.result.before_status == "planned" and .result.after_status == "in_progress" and .result.runnable_before' "$tmp/cas.json" >/dev/null
+run story complete US-A --json >"$tmp/complete.json"
+jq -e '.result.id == "US-A" and .result.result == "pass"' "$tmp/complete.json" >/dev/null
 run query stories --json | jq -e '(.result.stories[] | select(.id == "US-B").runnable) == true' >/dev/null
 
 set +e

@@ -8,6 +8,30 @@ The Rust Harness CLI is the primary interface for the durable layer. Installed
 projects use the prebuilt binary at `scripts/bin/harness-cli` on macOS/Linux or
 `scripts/bin/harness-cli.exe` on Windows for normal Harness work.
 
+Request authority comes before runtime setup. Answer, explain, review,
+diagnose, plan, and status requests remain read-only: inspect what is already
+present, and do not bootstrap, initialize/migrate, record intake, or trace.
+
+For a change, build, or fix request after a fresh clone or install, bootstrap
+the local ignored runtime before querying or changing state:
+
+```bash
+scripts/bootstrap-harness.sh
+```
+
+```powershell
+.\scripts\bootstrap-harness.ps1
+```
+
+In this source repository, bootstrap builds the CLI from the checked-out Rust
+source so code and command behavior cannot drift. It refuses to invent an empty
+replacement when the default core database is missing, and it rejects a
+schema-current database that still contains product-owned state. Restore the
+verified core epoch in that case. In an installed consumer it uses the
+checksum-verified prebuilt binary and safely initializes a missing local
+database. Both modes migrate older supported databases and refuse unsupported
+schemas or CLI/release-pin drift.
+
 ```bash
 scripts/bin/harness-cli init          # Create the database
 scripts/bin/harness-cli intake ...    # Record a feature intake classification
@@ -23,6 +47,9 @@ scripts/bin/harness-cli trace ...     # Record and auto-score an agent execution
 scripts/bin/harness-cli score-trace   # Score a trace against TRACE_SPEC.md tiers
 scripts/bin/harness-cli query ...     # Query harness data, including backlog --open/--closed
 scripts/bin/harness-cli query matrix --numeric  # Show proof flags as 1/0
+scripts/bin/harness-cli query matrix --active --summary  # Focus on unfinished work without evidence text
+scripts/bin/harness-cli query matrix --runnable --summary # Show work ready under protocol-v1 rules
+scripts/bin/harness-cli query matrix --story US-001      # Inspect one exact story
 scripts/bin/harness-cli db changeset apply .harness/changesets/run_123.changeset.jsonl
 scripts/bin/harness-cli db rebuild --from .harness/changesets
 scripts/bin/harness-cli migrate       # Apply pending schema migrations
@@ -38,13 +65,25 @@ no. `story verify <id>` runs the configured `verify_command`; it does not accept
 proof flags. Configure the command with `story add/update --verify`, run
 `story verify <id>`, then update proof flags with `story update`.
 
+`story update --status implemented` is rejected in both human-readable and
+JSON/CAS modes. Move active work to `in_progress` or `changed`, then use `story
+complete <id>` so fresh proof and the implemented transition happen together.
+
 Backlog `--risk` uses Harness lanes, not severity words: use `tiny`, `normal`,
 or `high-risk`. Use `tiny` instead of `low`. `query matrix` defaults to
 human-readable `yes`/`no`; use `query matrix --numeric` when copying values into
-`story update`.
+`story update`. Matrix filters combine with AND semantics: `--active` keeps
+`planned`, `in_progress`, and `changed` stories; `--runnable` uses the same rule
+as protocol story discovery; `--story <id>` selects one exact ID. `--summary`
+omits the potentially long evidence column while keeping lane and runnable
+state. With none of these flags, the existing full matrix output is unchanged.
 
 The schema lives in `scripts/schema/` and is version-controlled. The database
 file (`harness.db`) is `.gitignore`d.
+
+Repository maintainers can run `scripts/verify-revision-coherence.sh` to prove
+that crate, lockfile, pinned-release, migration, protocol, bootstrap, replay,
+and public-command contracts describe the same revision.
 
 Set `HARNESS_DB_PATH=/path/to/harness.db` when a workflow needs `harness-cli`
 to operate on an isolated copied database. `HARNESS_DB_PATH` takes precedence
@@ -95,6 +134,11 @@ scripts/bin/harness-cli db changeset apply ...
 scripts/bin/harness-cli db rebuild --from ...
 ```
 
+`query sql` accepts one read-only SQLite statement. The CLI enforces read-only
+access at the database connection, including for CTEs, pragmas, and statements
+with `RETURNING`; use typed Harness mutation commands, migrations, or semantic
+changesets for writes.
+
 `scripts/bin/harness-cli import brownfield` seeds or refreshes the durable database
 from existing Harness v0 markdown in `docs/TEST_MATRIX.md`,
 `docs/decisions/`, and `docs/HARNESS_BACKLOG.md`. This keeps already-installed
@@ -144,7 +188,15 @@ curl -fsSL "https://raw.githubusercontent.com/hoangnb24/repository-harness/main/
 file is recognized as the old Harness-generated operating guide, the installer
 replaces it with the current shim. Otherwise it appends or replaces only the
 marked `<!-- HARNESS:BEGIN -->` block so project-specific instructions remain
-in place.
+in place. Both installers read that block from
+`scripts/agent-harness-block.md`; the Bash `--claude` path reads
+`scripts/claude-harness-block.md`, whose only import is `AGENTS.md`. This keeps
+root, fresh-install, and refresh behavior on the same authority text.
+
+`--upgrade-cli` (PowerShell: `-UpgradeCli`) also refreshes the marked
+`AGENTS.md` Harness block. This prevents a new binary from retaining stale
+request authority while preserving text outside the marked block and creating
+the normal backup. It does not overwrite arbitrary custom documentation.
 
 The installer must stay limited to harness files. Do not use it to scaffold
 application source folders, package scripts, CI, tests, platform shells, or fake
@@ -198,26 +250,19 @@ Migration files live under `scripts/schema/` and are named `NNN-description.sql`
 where `NNN` is a zero-padded version number. Run `scripts/bin/harness-cli migrate` to
 apply pending migrations.
 
-## Future Command Contract
+## Pre-Merge Validation Contract
 
-Expected future checks:
+Repository maintainers and pull-request CI run the same release-relevant gate:
 
-```text
-validate:quick
-  format, lint, typecheck, unit tests, architecture check
-
-test:integration
-  backend contract and integration checks
-
-test:e2e
-  user-visible end-to-end flows
-
-test:platform
-  platform shell smoke checks, if the project has a native shell
-
-test:release
-  full suite, log checks, and performance smoke
+```bash
+scripts/validate-premerge.sh
 ```
+
+It checks Rust formatting, tests, and linting; revision/schema/command
+coherence; bootstrap, protocol, installer, documentation, and representative
+task-effect contracts; release workflow structure; and whitespace errors.
+Installed consumer projects keep their own stack-specific validation commands;
+the template does not impose this repository's Rust gate on them.
 
 ## Changeset Rebuild Validation
 
@@ -256,7 +301,7 @@ scripts/build-harness-cli-release.sh --target x86_64-unknown-linux-gnu
 ```
 
 GitHub releases are produced by
-`.github/workflows/harness-cli-release.yml`. Push a tag matching `v*` or
+`.github/workflows/harness-cli-release.yml`. Push a tag matching
 `harness-cli-v*` to run the verification job, build all supported targets on
 native hosted runners, and upload these release assets:
 

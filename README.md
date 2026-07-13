@@ -112,8 +112,8 @@ project's local instructions.
 If the project is driven with Claude Code, add `--claude`. Claude Code never
 auto-loads `AGENTS.md`, so without this the installed harness is invisible to
 fresh sessions. The flag installs (or refreshes) a `CLAUDE.md` whose marked
-Harness block `@`-imports `AGENTS.md` and `docs/FEATURE_INTAKE.md` into every
-session's context. An existing `CLAUDE.md` gets the block appended after a
+Harness block imports only `AGENTS.md`, the canonical request-authority and
+retrieval entrypoint. An existing `CLAUDE.md` gets the block appended after a
 backup; plain installs without the flag never touch `CLAUDE.md`:
 
 ```bash
@@ -137,6 +137,20 @@ The installer also downloads the prebuilt Harness CLI for the current platform,
 verifies its `.sha256` checksum, and installs it at
 `scripts/bin/harness-cli` on macOS/Linux or `scripts/bin/harness-cli.exe` on
 Windows. The Rust CLI is the main Harness tool and stable command path.
+
+Then bootstrap the local ignored database. A Harness source checkout builds the
+CLI from that checkout and validates the restored core-state epoch; it refuses
+to fabricate an empty replacement for missing repository state. An installed
+project reuses the verified release binary and initializes its own empty local
+state:
+
+```bash
+scripts/bootstrap-harness.sh
+```
+
+```powershell
+.\scripts\bootstrap-harness.ps1
+```
 
 Harness CLI release assets are published from tags by the
 `Harness CLI Release` GitHub Actions workflow. The installer expects each
@@ -205,17 +219,21 @@ full model, the degrade ladder, and how to wire a tool into a flow step.
 
 ## Current State
 
-This repository is in Harness v0.
+This repository implements the Harness v0 product: a Rust CLI, SQLite durable
+layer, installers, operating documents, contract tests, and release automation.
+Those upstream components are executable product behavior, not placeholders.
 
-There is no application implementation and no baked-in product specification
-yet. The current work is the reusable project harness: the file structure,
-agent operating model, feature intake process, story templates, and validation
-expectations that help humans and agents turn a future user-provided spec into
-implementation work.
+Installing Harness into another repository does not create or choose that
+consumer's application, stack, or product specification. It adds the reusable
+engineering layer that helps humans and agents turn the consumer's intent into
+validated work.
 
 ## Product Sources
 
-No product contract is currently defined.
+The upstream Harness contract lives in this README, the operating documents,
+the versioned orchestration contract, story packets, and executable tests. The
+generic `docs/product/` directory is reserved for a consumer project's product
+contract; Harness intentionally does not populate it with a fake domain model.
 
 When a user provides a project specification, add or reference it as the input
 spec for the first buildout, then derive smaller living artifacts from it:

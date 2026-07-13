@@ -152,8 +152,8 @@ without parsing the human table.
 | `import brownfield` | Project memory | Seed durable records from markdown state. | none |
 | `intake` | Task specification | Record a feature intake classification. | `--type`, `--summary`, `--lane` |
 | `story add` | Task state | Create a durable story record. | `--id`, `--title`, `--lane`, optional `--verify` |
-| `story update` | Task state | Update story status, proof flags, evidence, or verification command. | `--id`, optional proof/status fields |
-| `story update --json` | Task state | Perform a machine-readable update, optionally with transactional compare-and-set/runnable preconditions. | `--id`, update fields, optional `--expected-status`, `--require-runnable` |
+| `story update` | Task state | Update non-completion story status, proof flags, evidence, or verification command; `implemented` requires `story complete`. | `--id`, optional proof/status fields |
+| `story update --json` | Task state | Perform a machine-readable non-completion status update with transactional compare-and-set/runnable preconditions. | `--id`, `--status`, `--expected-status`, optional `--require-runnable` |
 | `story dependency add` | Task state | Add a cycle-safe durable dependency edge. | `--blocker`, `--blocked` |
 | `story dependency remove` | Task state | Remove a durable dependency edge; missing edges are unchanged. | `--blocker`, `--blocked` |
 | `story hierarchy add` | Task state | Add an idempotent, cycle-safe parent/child edge. | `--parent`, `--child`, optional `--json` |
@@ -179,7 +179,7 @@ without parsing the human table.
 | `score-context` | Context selection | Score trace reads against compiled context rules. | trace id |
 | `audit` | Entropy auditing | Run drift checks and compute entropy score. | none |
 | `propose` | Entropy auditing | Read deterministic improvement proposals, or explicitly accept/reject one stable key. | `--accept <key>` plus one outcome schedule, or `--reject <key> --reason <text>` |
-| `query matrix` | Task state | Show durable story proof matrix. | optional `--numeric` |
+| `query matrix` | Task state | Show the durable story proof matrix, optionally focused to active, runnable, or one exact story and without long evidence text. | optional `--numeric`, `--active`, `--runnable`, `--story <id>`, `--summary` |
 | `query contract` | Tool access | Discover protocol, capabilities, supported schema range, and DB state without writes. | required `--json` |
 | `query stories` | Task state | Return stable orchestration story records. | required `--json` |
 | `query work-graph` | Task state | Return one transactionally consistent story/dependency/hierarchy graph and revision. | required `--json` |
@@ -193,7 +193,7 @@ without parsing the human table.
 | `query tools` | Tool access | Show compiled and registered tool entries. | optional `--json`, `--summary`, `--responsibility`, `--capability`, `--status` |
 | `query interventions` | Intervention recording | Show intervention records. | optional `--trace`, `--story`, `--type` |
 | `query stats` | Task state | Show durable record counts. | none |
-| `query sql` | Tool access | Run arbitrary SQL against `harness.db`. | SQL text |
+| `query sql` | Tool access | Run one read-only SQL statement against `harness.db`. | SQL text |
 | `db changeset apply` | Task state | Apply one semantic changeset idempotently. | changeset path |
 | `db changeset status` | Task state | Parse and inspect one changeset ID/content SHA/applied state without writing. | changeset path, required `--json` |
 | `db snapshot` | Task state | Create an integrity-checked atomic SQLite online-backup snapshot. | `--output`, required `--json` |
