@@ -66,6 +66,8 @@ try {
 
     if ($InitialArtifact) {
         $InitialArtifact = (Resolve-Path $InitialArtifact).Path
+        & (Join-Path $Root "tests/protocol/smoke-v0.1.14-artifact.ps1") -Artifact $InitialArtifact
+        if (!$?) { throw "frozen initial protocol smoke failed" }
         $Upgrade = Join-Path $Temp "upgrade"
         New-Item -ItemType Directory -Force (Join-Path $Upgrade "scripts/bin") | Out-Null
         Copy-Item $InitialArtifact (Join-Path $Upgrade "scripts/bin/harness-cli.exe")
@@ -84,6 +86,8 @@ try {
         if ($CandidateRef -ne "harness-cli-v0.0.0-candidate" -and $CandidateRef -ne "harness-cli-v$BinaryVersion") {
             throw "candidate tuple mismatch: ref=$CandidateRef binary=$BinaryVersion"
         }
+        & (Join-Path $Root "tests/protocol/smoke-native-artifact.ps1") -Artifact (Join-Path $Upgrade "scripts/bin/harness-cli.exe")
+        if (!$?) { throw "installed candidate protocol smoke failed" }
         Write-Host "candidate tuple: template_ref=$CandidateRef binary_version=$BinaryVersion binary_sha256=$CandidateHash"
     }
 

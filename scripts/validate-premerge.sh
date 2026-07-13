@@ -31,8 +31,7 @@ tests/maintenance/test-harness-cli-release-classification.sh
 tests/maintenance/test-render-changelog-files.sh
 tests/docs/test-doc-contracts.sh
 tests/evals/test-task-authority.sh
-tests/release/test-release-workflow-contract.sh
-tests/release/test-release-identity-guard.sh
+tests/release/test-post-merge-release-recovery.sh
 
 git diff --check
 

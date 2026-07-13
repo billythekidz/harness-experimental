@@ -59,7 +59,7 @@ for required_gate in \
   'scripts/verify-revision-coherence.sh' \
   'tests/docs/test-doc-contracts.sh' \
   'tests/evals/test-task-authority.sh' \
-  'tests/release/test-release-workflow-contract.sh'; do
+  'tests/release/test-post-merge-release-recovery.sh'; do
   rg -Fq -- "$required_gate" "$root/scripts/validate-premerge.sh" ||
     fail "pre-merge wrapper omits required gate: $required_gate"
 done
@@ -69,8 +69,9 @@ done
 
 grep -Fq 'run: scripts/validate-premerge.sh' "$root/.github/workflows/premerge.yml" ||
   fail 'pull-request workflow does not use the local validation contract'
-grep -Fq 'test-install-harness-modes.ps1 -CandidateArtifact target/debug/harness-cli.exe' \
-  "$root/.github/workflows/premerge.yml" ||
+grep -Fq 'tests/installer/test-install-harness-modes.ps1' "$root/.github/workflows/premerge.yml" &&
+  grep -Fq -- '-InitialArtifact dist/us092-harness-cli-windows-x64.exe' \
+    "$root/.github/workflows/premerge.yml" ||
   fail 'pull-request workflow does not exercise the PowerShell installer contract'
 grep -Fq 'run: scripts/validate-premerge.sh' "$root/.github/workflows/harness-cli-release.yml" ||
   fail 'release workflow does not reuse the pre-merge validation contract'
